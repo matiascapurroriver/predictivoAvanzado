@@ -1,0 +1,766 @@
+---
+title: "Analítica Descriptiva"
+author: "Manuel Hanono, Sol Winkel, Inés Murtagh y Bruno Soifer"
+date: "`r format(Sys.Date())`"
+output: 
+  bookdown::html_document2:
+    theme: cerulean
+    toc: true #TRUE to include a table of contents in the output
+    toc_depth: 2 # Depth of headers to include in table of contents
+    toc_float: true
+    code_download: false
+    number_sections: true
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE,echo=FALSE)
+knitr::opts_chunk$set(results = "hide")
+
+```
+
+> **"Tratamiento de dataset, análisis y gráficos"**
+>
+> Trabajo Grupal
+
+Para el siguiente trabajo se tomó una base de datos abierta de Estados Unidos llamada “NYPD Arresta Data (historic)”, la cual proporciona información de todos los arrestos realizados por el Departamento de Policías, específicamente en la ciudad de Nueva York. Cada registro representa un arresto e incluye información sobre el tipo de delito, la ubicación y el momento de la ejecución, además de algunos datos sobre la persona arrestada. 
+
+
+Fuente: [NYC Open Data](https://data.cityofnewyork.us/Public-Safety/NYPD-Arrests-Data-Historic-/8h9b-rp9u)
+
+***
+
+**Objetivo**
+
+El objetivo principal será reducir el delito. Para ello, se buscará analizar qué variables son significativas para poder detectar estas cuestiones de seguridad y poder cumplir el objetivo. Para ello analizaremos variables como: rango etario, raza, barrio, entre otras. 
+
+***
+
+**Preguntas para la base:**
+
+¿Qué grupo etario y cuales características raciales son más propensas a ser arrestados?
+¿Qué barrio es el más peligroso respecto a la cantidad de arrestos?
+¿Cuál es la ley que más se infringe generando más arrestos?
+¿Qué época del año es en la que se registran más arrestos? ¿Y cómo cambia esta respuesta dependiendo del barrio?
+
+
+_Como se podría responder a esas preguntas:_
+
+Se busca establecer si la edad de la persona y la raza condiciona a que una persona sea arrestada, para poder generar cierto estereotipo, que a nivel seguridad es muy importante. Para ello, es necesario establecer una correlación entre las variables y poder analizar si la misma es significativa o no. En base a esta última respuesta, se podrá realizar una conclusión sobre el interrogante en cuestión.
+Intentaremos encontrar información acerca de los barrios con más cantidad de arrestos para determinar qué barrios son más peligrosos. Mediante una serie de gráficos, vamos a observar la ubicación de los arrestos (en las comisarías), para ver si hay algún patrón a nivel ubicación en lo que respecta al delito.
+
+Se busca ver si hay una ley que se infringió más que las demás, siendo la causa de más arrestos.  Para esto se realizará un análisis por año, acerca de cuáles son los motivos de los arrestos.
+
+Se puede realizar un análisis sobre la fecha de arresto, y segmentar este tipo de información a través de días, meses, semanas o incluso estaciones del año. De esta manera se puede llegar a una conclusión sobre qué épocas del año son las que se necesitan más agentes policiales para contrarrestar distintos tipos de delitos.
+
+***
+
+```{r clean,  message=F, include=FALSE}
+# limpiar memoria
+rm(list=ls())
+gc()
+```
+
+```{r, echo=FALSE}
+# cargar librerías
+library(readxl)
+library(tidyverse)    # data management
+library(ggplot2)      # graficos
+library(skimr)
+library(funModeling)
+```
+
+
+```{r, echo=FALSE}
+arrests = read_csv("NYPD_Arrests_Data__Historic_.csv")
+```
+
+```{r, echo=FALSE}
+cat('Filas y columnas:', dim(arrests), '\n')
+
+cat('\nColumnas de la base:\n')
+colnames(arrests)
+```
+
+# Descripción del Dataset
+
+**La base de datos cuenta con 5.300.000 registros y 19 variables. Incluye información desde 2006 al 2021.**
+
+A continuación se describirán las variables que fueron consideradas principales e imprescindibles para el desarrollo y el análisis que se busca realizar:
+
+Las variables numéricas son:
+
+- `PD_CD` (tres dígitos internos de clasificación)
+- `KY_CD` (tres dígitos internos de clasificación, categoría más general que PD_CD)
+- `ARREST_PRECINT` (precinto de Nueva York donde ocurrió el arresto)
+- `JURISDICTION_CODE` (jurisdicción, ya sea dentro o en las afueras de la ciudad de Nueva York, donde ocurrió el arresto).
+0(Patrol), 1(Transit) and 2(Housing) represent NYPD whilst codes 3 and more represent non NYPD jurisdictions
+
+- `Latitude` (latitud de la comisaría de arresto)
+- `Longitude` (longitud de la comisaría de arresto)
+
+
+Las variables de tipo texto son:
+
+- `ARREST_KEY` (ID generado de manera automática para cada arresto)
+- `PD_DESC` (descripción del PD code)
+- `OFNS_DESC` (descripción del KY_CD)
+- `LAW_CODE` (cargos del código de ley correspondientes a la Ley Penal del Estado de Nueva York, VTL y otras diversas leyes locales)
+- `LW_CAT_CD` (nivel de ofensa: delito grave, delito menor, violación)
+- `ARREST_BORO` (“Borough” del arresto, posibles valores: B(Bronx), S(Staten Island), K(Brooklyn), M(Manhattan), Q(Queens))
+- `AGE_GROUP` (rango de edad del arrestado)
+- `PERP_SEX` (descripción del sexo del arrestado)
+- `PERP_RACE` (descripción de raza del arrestado)
+- `X_COORD_CD` (coordenada X del “New York State Plane Coordinate System”)
+- `Y_COORD_CD` (coordenada Y del “New York State Plane Coordinate System”)
+
+
+Las variables en formato de fecha son:
+
+- `Date` (fecha exacta del arresto)
+
+
+Las variables en formato punto son:
+
+- `Lon_Lat` (punto georeferenciado basado en latitud y longitud de la comisaría de arresto)
+
+
+# Tratamiento del Dataset
+
+```{r, echo=FALSE}
+glimpse(arrests)
+```
+
+### Dar formato
+
+Asegurarse que las variables que le corresponden fechas estén en el formato que corresponde (formato Date). Estos datos estan en formato `chr`, y necesitan ser cambiados a la `date`.
+
+```{r}
+# Chequear formato date
+arrests$ARREST_DATE = as.Date(arrests$ARREST_DATE, format = '%m/%d/%Y')
+
+min(arrests$ARREST_DATE)
+max(arrests$ARREST_DATE)
+```
+El registro de los datos se encuentra en el período entre 2006 y 2021
+
+
+### Eliminar variables irrelevantes
+
+Vamos a eliminar la variable Lon_Lat, que contiene el punto con la latitud y la longitud, por lo que no las necesitamos juntas. También, X_COORD e Y_COORD, ya que utilizaremos latitud y longitud.
+```{r}
+arrests$Lon_Lat = NULL
+arrests$X_COORD_CD = NULL
+arrests$Y_COORD_CD = NULL
+```
+
+
+### Crear variables nuevas
+Se crean las variables de mes y dia de la semana, a partir de la variable Fecha
+```{r}
+# mes del arresto
+arrests$Month = format(arrests$ARREST_DATE,'%B')
+
+# Día de la semana del arresto
+arrests$Day = weekdays(arrests$ARREST_DATE) 
+```
+
+### Renombrar columnas
+``` {r}
+arrests = arrests %>% rename(Borough = ARREST_BORO)
+arrests = arrests %>% rename(Sex = PERP_SEX)
+arrests = arrests %>% rename(Race = PERP_RACE)
+arrests = arrests %>% rename(Jurisdiction = JURISDICTION_CODE)
+arrests = arrests %>% rename(Date = ARREST_DATE)
+arrests = arrests %>% rename(Precint = ARREST_PRECINCT)
+arrests = arrests %>% rename(Category = LAW_CAT_CD)
+arrests = arrests %>% rename(Age = AGE_GROUP)
+arrests = arrests %>% rename(Description = OFNS_DESC)
+arrests = arrests %>% rename(Law = LAW_CODE)
+arrests = arrests %>% rename(ID = ARREST_KEY)
+```
+
+
+# Revisión de nulos
+``` {r}
+# NULOS
+#Hay algunos nulos que estan como ""
+arrests$Borough[arrests$Borough == ""] = NA
+arrests$Date[arrests$Date == ""] = NA
+arrests$Precint[arrests$Precint == ""] = NA
+arrests$PD_CD[arrests$PD_CD == ""] = NA
+arrests$PD_DESC[arrests$PD_DESC == ""] = NA
+arrests$KY_CD[arrests$KY_CD == ""] = NA
+arrests$Description[arrests$Description == ""] = NA
+arrests$Law[arrests$Law == ""] = NA
+arrests$Category[arrests$Category == ""] = NA
+arrests$Jurisdiction[arrests$Jurisdiction == ""] = NA
+arrests$Age[arrests$Age == ""] = NA
+arrests$Sex[arrests$Sex == ""] = NA
+arrests$Race[arrests$Race == ""] = NA
+arrests$Latitude[arrests$Latitude == ""] = NA
+arrests$Longitude[arrests$Longitude == ""] = NA
+
+# Contar número de nulos por columna
+sapply(arrests, function(x) sum(is.na(x)))
+```
+
+Al ser una base con más de 5.300.000 observaciones, en las columnas con menos de 10 nulo, procedemos a borrar esos registros.
+```{r}
+arrests = arrests %>% filter(!is.na(arrests$Latitude))
+arrests = arrests %>% filter(!is.na(arrests$Longitude))
+```
+
+
+Se procederá a imputar los nulos de las distintas variables
+
+## Arreglar las columnas
+
+### Arrest Borough
+``` {r}
+arrests = arrests %>% mutate(Borough = case_when(Borough == "B" ~ "Bronx",
+                                                 Borough == "S" ~ "Staten Island",
+                                                 Borough == "K" ~ "Brooklyn",
+                                                 Borough == "M" ~ "Manhattan",
+                                                 Borough == "Q" ~ "Queens",
+                                                 T ~ "Unknown"))
+
+arrests %>% group_by(Borough) %>% summarise(n = n())
+```
+
+### Jurisdiction
+
+Jurisdiction es la variable que más 0's tiene, casi un 84%, pero la realidad es que se le pone 0 para calificar. Como fue mencionado antes, el codigo de jurisdicción es: 0(Patrulla), 1(Transito) and 2(Casas), y mayor a 3 representa jurisdicciones no pertenecientes a NYPD.
+
+```{r}
+# para que el modelo no tome como que la variable tiene 0s, se transforma el tipo de variable numerica a categorica
+arrests <- arrests %>% mutate(Jurisdiction = case_when(Jurisdiction == 0 ~ "Patrol",
+                                                       Jurisdiction == 1 ~ "Transit", 
+                                                       Jurisdiction == 2 ~ "Housing",
+                                                       T ~ "Other"))
+```
+
+### Law Category
+
+Para la variable 'Category' se cambiaron los valores de las letras por el nombre completo, y para aquellos campos vacíos se categorizaron los registros como desconocidos ('Unknown')
+```{r}
+arrests <- arrests %>% mutate(Category = case_when(Category == "F" ~ "Felony",
+                                                     Category == "M" ~ "Misdemeanor",
+                                                     Category == "V" ~ "Violation",
+                                                     Category == "I" ~ "Infraction",
+                                                     T ~ "Unknown"))
+
+arrests %>% group_by(Category) %>% summarise(n = n())
+```
+
+
+
+## Imputación Race: 
+La variable Race contiene registros que aparecen como "UNKNOWN". Son valores que claramente necesitan ser imputados o eliminados, debido a que no corresponden con la defincion teorica de la columna para las distintas razas.
+
+```{r, echo=FALSE}
+arrests %>% group_by(Race) %>% summarise(cantidad=n()) %>% arrange(-cantidad)
+copia = arrests
+
+# Se plantea la hipótesis: ¿existe independencia entre si el valor de Race es "un missing" UNKNOWN" con el tipo de crimen cometido (KY_CD)? 
+# Para eso se realiza una tabla de contingencia.
+
+copia[!copia$Race %in% c("AMERICAN INDIAN/ALASKAN NATIVE", "ASIAN / PACIFIC ISLANDER", "BLACK","BLACK HISPANIC", "OTHER", "WHITE", "WHITE HISPANIC"),]$Race = "Es unknown"
+copia[copia$Race %in% c("AMERICAN INDIAN/ALASKAN NATIVE", "ASIAN / PACIFIC ISLANDER", "BLACK", "BLACK HISPANIC", "OTHER", "WHITE", "WHITE HISPANIC"),]$Race = "No es unknown"
+
+tabla = table(copia$KY_CD, copia$Race) 
+chisq.test(tabla)
+# Hay dependencia entre si un Race figura como "unknown" y su KY_CD
+
+# De los valores UNKNOWN, ¿cuál es el código de ofensa que más aparece? (la moda)
+copia %>% filter(Race == "Es unknown") %>% group_by(KY_CD) %>% summarise(cantidad=n()) %>% arrange(-cantidad) %>% head(1)
+
+#EL KY_CD 235 es el key code que mas UNKWNOWN contiene en la raza, por eso a todos los UNKNOWN de la raza los imputo con la moda de age group para el ky_cd 235 tengo que modificar por la que mas se repite
+copia %>% filter(KY_CD==235) %>% group_by(Race) %>%  summarise(cantidad=n()) %>% arrange(-cantidad)%>% head(1)
+
+#imputo a todos los valores faltantes con "BLACK"
+arrests[!arrests$Race %in% c("AMERICAN INDIAN/ALASKAN NATIVE", "ASIAN / PACIFIC ISLANDER", "BLACK", "BLACK HISPANIC", "OTHER", "WHITE", "WHITE HISPANIC"),]$Race = "BLACK"
+arrests %>% group_by(Race) %>% summarise(cantidad=n())
+```
+
+
+## Imputación de Age: 
+La variable Age contiene missings. Son valores que claramente necesitan ser imputados o eliminados, debido a que no corresponden con la defincion teorica de la columna.
+
+```{r, echo=FALSE}
+arrests %>% group_by(Age) %>% summarise(cantidad=n()) %>% arrange(-cantidad)
+copia = arrests
+
+# Se plantea la hipótesis: ¿existe independencia entre si el valor de age group es un missing con el tipo de crimen cometido? 
+# Para eso se realiza una tabla de contingencia, para determinar que valores son considerados missings.
+
+copia[!copia$Age %in% c("<18","18-24","25-44","45-64","65+"),]$Age = "Missing"
+copia[copia$Age %in% c("<18","18-24","25-44","45-64","65+"),]$Age = "No missing"
+
+copia %>% group_by(Age) %>% summarise(cantidad=n())
+
+tabla = table(copia$KY_CD,copia$Age)
+chisq.test(tabla)
+
+#Existe dependencia entre si un valor es o no missing y su KY_CD
+
+#De los valores faltantes, ¿cuál es el código de ofensa que más aparece? (la moda)
+copia %>% filter(Age=="Missing") %>% group_by(KY_CD) %>% summarise(cantidad=n()) %>% arrange(-cantidad) %>% head(1)
+# EL KY_CD 235 es el key code que mas missings contiene en el age group. Por eso, a todos los missings de age group los imputo con la moda de age group para el ky_cd 235
+
+copia %>% filter(KY_CD==235) %>% group_by(Age) %>% summarise(cantidad=n()) %>% arrange(-cantidad)%>% head(1)
+
+#imputo a todos los valores faltantes con el rango etario 25-44
+arrests[!arrests$Age %in% c("<18","18-24","25-44","45-64","65+"),]$Age = "25-44"
+arrests %>% group_by(Age) %>% summarise(cantidad=n())
+```
+
+
+#Ver el estado de las variables
+
+``` {r}
+df_status(arrests)
+```
+
+```{r}
+arrests$KY_CD %>% unique()
+arrests %>% filter(is.na(KY_CD))
+```
+
+## Imputación de KY_CD: 
+
+KY_CD es una de las variables que mayor porcentaje de missings tiene (17%). 
+Esto se debe a que no hay información acerca de la descripción del arresto.
+```{r, echo=FALSE}
+# Imputacion KY_CD
+arrests %>% group_by(KY_CD) %>% summarise(cantidad=n())
+copia = arrests
+
+# Se plantea la hipótesis: ¿existe independencia entre si el valor de KY_CD es un missing con el tipo de crimen cometido? Para eso se realiza una tabla de contingencia, para determinar que valores son considerados missings.
+
+copia[!is.na(copia$KY_CD),]$KY_CD = 0
+copia[is.na(copia$KY_CD),]$KY_CD = 1
+
+copia %>% group_by(KY_CD) %>% summarise(cantidad=n())
+
+# Si es un missing, figura como 1
+
+tabla3 = table(copia$KY_CD,copia$Category)
+chisq.test(tabla3)
+
+# Existe dependencia entre si el KY_CD es un missing y su Category
+
+# De los valores faltantes, ¿cuál es la categoria de crimen que más aparece? (la moda)
+copia %>% filter(KY_CD==1) %>% group_by(Category) %>% summarise(cantidad=n()) %>% arrange(-cantidad) %>% head(1)
+# "Misdemeanor" es la categoria con mas missings en el valor de KY_CD. Por eso, a todos los missings de KY_CD los imputo con la moda de KY_CD para la categoria "Misdemeanor"
+
+arrests %>% filter(Category=="Misdemeanor") %>% group_by(KY_CD) %>% summarise(cantidad=n()) %>% arrange(-cantidad)%>% head(1)
+# imputo a todos los valores faltantes con el KY_CD 235 (la moda para "Misdemeanor)
+
+arrests[is.na(arrests$KY_CD),]$KY_CD = 235
+
+arrests %>% group_by(KY_CD) %>% summarise(cantidad=n())
+```
+
+
+# Outliers (valores atípicos)
+En los siguientes graficos, se realiza un boxplot para las variables (Precint, PD_CD, KY_CD), con el fin de observar si las mismas contienen valores atipicos.
+```{r}
+ggplot(arrests, aes(x = Precint)) + geom_boxplot(outlier.colour = 'red')
+ggplot(arrests, aes(x = PD_CD)) + geom_boxplot(outlier.colour = 'red')
+ggplot(arrests, aes(x = KY_CD)) + geom_boxplot(outlier.colour = 'red')
+```
+
+```{r}
+outliers = arrests %>% filter(arrests$KY_CD > 666) 
+outliers %>% group_by(KY_CD) %>% summarise(n = n())
+```
+A primera impresión pensamos que existian varios outliers severos en la variable KY_CD, pero al analizar en detalle los registros para esos outliers, resulta que simplemente son codigos de clasificación de arrrestos que tienen un valor significativamente mas alto que la mediana, y por eso se interpretan como valores atípicos.
+
+
+Luego, se realiza un boxplot de la variable Latitude, nuevamente para observar si existen o no valores atipicos.
+```{r}
+ggplot(arrests, aes(x = Latitude)) + geom_boxplot(outlier.colour = 'red')
+```
+Hay outliers en la variable de latitud, y son aquellos que tienen Latitude > 41 (7100). 
+En este caso, estan errados (se pasan de los parametros que pertenecen a los barrios de New York City)
+
+```{r}
+outlierslat <- arrests %>% filter(Latitude > 41)
+nooutlierslat <- arrests %>% filter(Latitude <= 41)
+
+#Los vamos a imputar según su Borough. Les ponemos la mediana de latitud según Borough.
+outlierslat <- outlierslat %>% mutate(Latitude = case_when(Borough == "Bronx" ~median(arrests[arrests$Borough == "Bronx", ]$Latitude, na.rm = TRUE), Borough == "Staten Island" ~ median(arrests[arrests$Borough == "Staten Island", ]$Latitude, na.rm = TRUE), Borough == "Brooklyn" ~ median(arrests[arrests$Borough == "Brooklyn", ]$Latitude, na.rm = TRUE), Borough == "Manhattan" ~ median(arrests[arrests$Borough == "Manhattan", ]$Latitude, na.rm = TRUE), Borough == "Queens" ~ median(arrests[arrests$Borough == "Queens", ]$Latitude, na.rm = TRUE)))
+
+outlierslat$Latitude = as.numeric(outlierslat$Latitude)
+
+arrests <- rbind(outlierslat, nooutlierslat)
+```
+
+Tras realizar la imputación de las latitudes, podemos obtener con las mismas un esbozo del mapa de la ciudad de Nueva York, donde los colores en este caso estan representando a los Borough. 
+
+```{r}
+#Tenemos el mapa de NY pero hay outliers en Latitude y Borough
+arrests %>%  ggplot()  + geom_point(aes(x = Longitude, y = Latitude, color = Borough))
+```
+
+
+
+# Variables a utilizar
+
+Vamos a trabajar con las siguientes variables:
+* Date (ya sea con la fecha, el mes o el día de la semana)
+* Race 
+* Age
+* Sex
+* Borough
+* KY_CD 
+* OFNC_DESC
+* Jurisdiction
+* Category
+
+
+## Análisis Estadístico
+Listado de variables con sus descripciones
+
+```{r, results=TRUE}
+summary(arrests$Date)
+```
+
+```{r}
+summary(arrests$Race)
+```
+
+```{r}
+summary(arrests$Age)
+```
+
+```{r}
+summary(arrests$Sex)
+```
+
+```{r}
+summary(arrests$Borough)
+```
+
+```{r}
+summary(arrests$Description)
+```
+
+```{r}
+summary(arrests$Jurisdiction)
+```
+
+```{r}
+summary(arrests$Category)
+```
+
+La mayoría de las variables son categoricas, ya que describen el arresto que sucedió.
+
+# Test de Hipótesis
+
+Test de independencia entre variables Age group y Race:
+
+```{r, results=TRUE}
+
+tabla5 = table(arrests$Age, arrests$Race)
+chisq.test(tabla5)
+```
+p-value muy chico, lo que significa que la prueba es significativa. Con una confianza del 95%, se puede afirmar que la edad y la raza no son indepentientes, es decir, que están relacionadas entre si.
+
+**********
+
+Test de independencia entre variables raza y categoria de la ley motivo de arresto:
+
+```{r, results=TRUE}
+tabla6 = table(arrests$Race, arrests$Category)
+chisq.test(tabla6)
+#la categoria de la ley infringida y la raza estan relacionadas entre si 
+```
+p-value muy chico, lo que significa que la prueba es significativa. Con un alfa del 5%, se puede afirmar que la categoria de la ley infringida y la raza estan relacionadas entre si.
+
+*******
+
+Test de independencia entre Trimestres y barrios:
+```{r, results=TRUE}
+# Pongo el dia de arresto en formato fecha y creo columna que tenga el mes
+
+# modifico el Month por Trimestres 
+arrests = arrests %>% mutate(Trimestre = case_when(
+    Month == 'enero' | Month== 'febrero' | Month == 'marzo' ~ 'primero', 
+    Month == 'abril' | Month== 'mayo' | Month == 'junio' ~ 'segundo', 
+    Month == 'julio' | Month== 'agosto' | Month == 'septiembre' ~ 'tercero', 
+    Month== 'octubre' | Month == 'noviembre' | Month == 'diciembre' ~ 'cuarto',
+    T ~ "Error")
+)
+
+#realizo test de independencia entre Trimestres y barrios
+tabla3 = table(arrests$Trimestre, arrests$Borough)
+chisq.test(tabla3)
+```
+p-value más chico que el alfa 0.05, lo que significa que la prueba es significativa. Se tiene evidencia suficiente de que no hay independencia entre el Trimestre y el barrio de Nueva York donde ocurre el incidente.
+
+
+
+# MCA
+
+Para el analisis de MCA, solo se utilizan las variables categoricas de Category, Age, Sex y Race.
+
+Se establece el set.seed para que las muestras aleatorias sean siempre las mismas.
+
+El análisis de MCA fue hecho en 4 periodos de 4 años distintos, con el objetivo de observar si a lo largo del tiempo cambio la tendencia en cuanto a las variables mencionadas.Se tomó en cada caso una muestra aleatoria de 50000 arrestos para simplificar el análisis. A continuación se realiza un análisis sobre cada período, teniendo en cuenta las diferencias entre los mismos y tratando de relacionar las variables de Sexo, Raza, Categoría (del delito) y rango de edad del arrestado.
+
+```{r}
+library("FactoMineR")
+library("factoextra")
+
+arrests %>% select(Category, Age, Sex, Race) %>% summary()
+set.seed(42)
+arrests = arrests %>% mutate(anio=as.numeric(format(Date,'%Y')))
+```
+
+*Ánálisis período 2006-2009*
+```{r}
+arrests2 = arrests %>% filter(anio %in% c(2006,2007,2008,2009))  %>% select(Category, Age, Sex, Race) %>% sample_n(50000) %>% filter(Category!='Unknown', Race!="OTHER")
+
+
+res.mca = MCA(arrests2, graph = T)
+
+fviz_mca_var(res.mca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # Avoid text overlapping
+             ggtheme = theme_minimal())
+
+```
+En el primer análisis, que comprende los arrestos entre los años 2006 a 2009, se puede apreciar como las variables de sexo y raza del arrestado no explican en gran parte el primer componente principal. Hay otras variables que pueden explicar en mayor medida este componente, como la categoría del delito que se cometió, o la edad del arrestado. 
+
+Si se mira solo este primer análisis (que comprende los primeros 4 años de la base), y se observa únicamente el segundo componente principal, se puede decir que una persona de raza “blanca”, probablemente tenga entre 45 y 64 años, y fue arrestado por haber cometido un delito menor. Si en cambio, solo se mira el primer componente principal, se puede decir que una persona de raza “negra”, haya cometido un delito catalogado como “felony”, y sea una persona de sexo masculino.
+
+Una persona que pertenece al cuarto cuadrante del gráfico probablemente tenga entre 18 y 24 años, sea de sexo masculino, pertenezca a la raza “white hispanic”, y haya cometido una violación.
+
+
+*Análisis 2010-2013*
+```{r}
+arrests3 = arrests %>% filter(anio %in% c(2010,2011,2012,2013))  %>% select(Category, Age, Sex, Race) %>% sample_n(50000) %>% filter(Category!='Unknown', Race!="OTHER")
+
+res.mca = MCA(arrests3, graph = T)
+
+fviz_mca_var(res.mca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # Avoid text overlapping
+             ggtheme = theme_minimal())
+
+```
+En este segundo periodo, que comprende los arrestos entre los años 2010 y 2013, la variable Race explica en muy poca medida el PC1 y es la que mejor explica el PC2 (al igual que en el primer periodo). Las categorías de Category y Sex que son las variables que más explican el PC1. 
+
+Observando con mayor detalle, se podría decir que si una persona tiene un alto PC2, es posible que el crimen cometido sea una infracción, sea un persona blanca, mayor a 65 años, y que sea asiático (no se puede afirmar con seguridad a que sexo pertenece). Por otro lado, si tiene un alto PC1 puede llegar a ser una mujer mayor a 18 años, y pertenecer a la raza “black hispanic”.
+
+Con respecto al cuarto cuadrante, en este caso se espera que sea una persona menor a 18 años, pertenezca a la raza “black hispanic”, y haya cometido un delito catalogado como “felony” (delito que es más grave que aquel que se denomina como “misdemeanor”). Este análisis coincide bastante con el hecho previamente para el primer período, con la diferencia que para este segundo período cambia el tipo de delito que una persona comete si se encuentra en el cuarto cuadrante.
+
+
+
+*Análisis 2014-2017*
+```{r}
+arrests4 = arrests %>% filter(anio %in% c(2014,2015,2016,2017))  %>% select(Category, Age, Sex, Race) %>% sample_n(50000) %>% filter(Category!='Unknown', Race!="OTHER")
+
+res.mca = MCA(arrests4, graph = T)
+
+fviz_mca_var(res.mca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # Avoid text overlapping
+             ggtheme = theme_minimal())
+
+```
+En el tercer análisis, que comprende los arrestos entre los años 2014 a 2017, se puede apreciar como la variable de raza del arrestado es la que explica en gran parte el primer componente principal. Se nota un gran cambio en esta variable, donde hasta el análisis anterior era la variable que más explicaba el segundo componente. En cuanto al análisis del segundo componente, en esta ocasión también se nota cierta diferencia con el período 2, ya que la variable de categoría es la que explica mejor (y en el caso anterior estaba más relacionada con el primer componente)
+
+Si se considera que una persona tiene un alto PC1, muy probablemente sea una persona mayor de 65 años y blanca, aunque no se puede definir con claridad el motivo por la que fue arrestada. Si se tiene un segundo componente principal alto, probablemente se trate de una mujer menor a 18 años, de raza asiática.
+
+Si se continúa con el análisis sobre el cuarto cuadrante, en este caso se puede decir que la persona arrestada tendrá entre 45 y 64 años, su raza sea la de “american indian”, y el delito cometido seguramente tenga que ver con una infracción o una violación. Este análisis sobre el cuarto cuadrante difiere bastante si se lo comparara con los análisis hechos previamente.
+
+
+*Análisis 2018-2021*
+```{r}
+arrests5 = arrests %>% filter(anio %in% c(2018,2019,2020,2021))  %>% select(Category, Age, Sex, Race) %>% sample_n(50000) %>% filter(Category!='Unknown', Race!="OTHER")
+
+res.mca = MCA(arrests5, graph = T)
+
+fviz_mca_var(res.mca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # Avoid text overlapping
+             ggtheme = theme_minimal())
+```
+
+El cuarto análisis comprende los años que se encuentran entre 2018 hasta el 2021. Las primeras dos dimensiones explican el 17,26% de la variabilidad de los datos, porcentaje más alto si se toman en cuenta los 4 períodos. Este análisis, realizado para todas las variables respecto a las dimensiones 1 y 2 permite evaluar cuánta variabilidad individual explica cada variable. 
+
+Para este análisis se puede ver como el segundo componente principal es explicado en gran parte por la variable edad y raza. En el caso del primer componente, las tres variables: Race, Age y Category explican de manera parecida. Mientras tanto, la variable Sex no explica suficientemente ninguno de los dos componentes. 
+
+Si se mira el primer componente principal, se puede decir que una persona con un Dim 1 alto probablemente tenga más 65 años, sea de raza “blanca”, y haya cometido un crimen relacionado a una violación o a una infracción. Si en cambio, se mira el segundo componente principal, se puede decir que es más probable que un hombre cometa un delito del tipo “Felony”, y una mujer un delito menos grave, un “Misdemeanor”.
+
+Si se sigue con el análisis del cuarto cuadrante, en este caso se puede decir que se ubican aquellas personas catalogadas como “american indian” y “white hispanic”, de sexo femenino, que tengan entre 25 y 44 años, y que hayan cometido un delito menor. Este análisis sobre el cuarto cuadrante difiere bastante respecto de los análisis hechos anteriormente.
+
+
+
+# Análisis de Gráficos
+
+*Cantidad de delitos por barrio*
+
+Este gráfico muestra la cantidad de arrestos realizados en cada barrio del estado de Nueva York. La idea es ver, a partir de los datos, que barrio es más peligroso. En este caso, Brooklyn es hoy en día el que más delitos tuvo. Manhattan se encuentra justo por debajo.
+```{r}
+#General
+barrios = arrests %>% group_by(Borough) %>% summarise(cantidad = n())
+
+barrios %>% ggplot(aes(x = Borough, y = cantidad)) +  xlab("Barrio") + ylab("Cantidad")+
+  geom_bar(stat="identity", fill = "#004173") + coord_flip()
+```
+
+*Proporción de crimenes por habitante según el barrio, visto en mapa de NY*
+
+Sin embargo, es interesante notar como cambia el dato anterior cuando se tiene en cuenta la cantidad de crimenes en relación a la cantidad de habitantes, donde se puede notar que, si bien Brooklyn es el barrio con mayor cantidad de crimenes, cuando se pone en perspectiva con la población que habita el barrio, se puede ver que es Manhattan el barrio más peligroso, seguido por Bronx.
+
+```{r}
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+class(world)
+
+consulta = arrests %>% group_by(Borough) %>% summarise(cantidad=n()) %>% head(5)
+vector = consulta$cantidad
+
+geo = st_read("C:/Users/bruno/OneDrive/Carrera/Segundo Cuatrimestre 2022/Analítica Descriptiva/Trabajo práctico/Borough Boundaries.geojson")
+df = geo
+df = df %>% arrange(boro_name)
+df = df %>% mutate(Crimenes = round(vector))
+df$cantidad = c(1424948, 2641052, 1576876, 2331143, 493494)
+df$Proporcion = (df$Crimenes/10)/df$cantidad
+
+ggplot() + geom_sf(data = df, aes(fill=Proporcion)) + theme_void() + geom_sf_label(data=df, aes(label = boro_name))
+
+
+```
+
+*Cantidad de delitos por sexo*
+
+El siguiente gráfico muestra la cantidad de delitos realizados por hombres o mujeres. Se puede ver que el sexo masculino es más arrestado que el femenino, es decir, cometen más delitos, independientemente de el tipo de delito que haya sido.
+
+```{r}
+sexo = arrests %>% group_by(Sex) %>% summarise(cantidad = n())
+
+sexo %>% ggplot(aes(x = Sex, y = cantidad)) +  xlab("Barrio") + ylab("Cantidad")+
+  geom_bar(stat="identity", fill = "#004173") + coord_flip()
+```
+
+*Cantidad de delitos por categoría*
+
+En el gráfico de barras de abajo se muestra la cantidad de delitos realizados por hombres o mujeres, ahora sí, dependiendo del tipo de delito cometido. Puede ser una violación, un delito menor, una infracción o un crimen. Una vez más, el hombre supera a la mujer en cantidad de arrestos, especialmente en los casos de crímenes, delitos menores o violaciones.
+
+```{r}
+categoria = arrests %>% group_by(Sex, Category) %>% summarise(cantidad = n())
+
+categoria %>% ggplot(aes(x = Category, y = cantidad, fill = Sex)) +  xlab("Barrio") + ylab("Cantidad") + 
+  scale_fill_manual(values = c("#ab3ed8", "#004173"))+
+  geom_bar(stat = "identity", position = "dodge",colour="white") + coord_flip()
+```
+
+*Cantidad de delitos por raza*
+
+El siguiente gráfico muestra los arrestos por raza de la persona. En la base de datos existen distintas etnias en las personas arrestadas, ya sean blancos, asiáticos, americanos, nativos, hispanos, etc. Para el estado de NY la raza ‘BLACK’ es la que más delitos ha cometido.
+
+```{r}
+raza = arrests %>% group_by(Race) %>% summarise(cantidad = n())
+
+raza %>% ggplot(aes(x = Race, y = cantidad)) +  xlab("Barrio") + ylab("Cantidad")+
+  geom_bar(stat="identity", fill = "#004173")  + coord_flip()
+```
+
+*Cantidad de crimenes por jurisdicción según el Barrio*
+
+El siguiente gráfico muestra los arrestos por barrio y por jurisdicción. Dentro de jurisdicción se encuentran las categorías: “Housing, Patrol y Transit”. La mayoría de los arrestos en todos los barrios son de la categoría “Patrol”. En el caso de Staten Island, es relevante observar que casi no hay arrestos por “Transit” o por “Housing”.
+
+```{r}
+arrests %>% group_by(Borough, Jurisdiction) %>% filter(Borough != "Unknown", Jurisdiction != "Other") %>% summarise(cantidad_promedio=mean(n())) %>% 
+  ggplot(aes(fill=Jurisdiction, y=cantidad_promedio, x=Borough)) + 
+  scale_fill_manual(values = c("#004173", "#0979b0", "#0cb7f2"))+
+  geom_bar(position="dodge", stat="identity")+ coord_flip() +
+  xlab("")+ ylab("")
+```
+
+*Cantidad de crimenes según el Barrio, en los 7 días de la semana*
+
+El siguiente gráfico muestra los arrestos por barrio y por día de la semana. Es significativa la diferencia en la cantidad de arrestos que se ve los domingos, que puede estar asociada a que haya menos presencia policial que detecte incidentes o a su vez, puede también tener que ver con que es el día de descanso para las personas en general. 
+
+```{r}
+library(viridis)
+library(hrbrthemes)
+arrests %>% group_by(Borough, Day) %>% filter(Borough != "Unknown", Day != "Other") %>% summarise(cantidad_promedio=mean(n())) %>% 
+  ggplot(aes(fill=Borough, y=cantidad_promedio, x=Borough)) + 
+  geom_bar(position="dodge", stat="identity") +
+  scale_fill_manual(values = c("#004173", "#0979b0", "#0cb7f2", "#7cdaf9", "#b6ffff"))+
+  facet_wrap(~Day) +
+  theme(legend.position="none") +
+  xlab("")+ ylab("") + coord_flip()
+```
+*Cantidad de crimenes a lo largo de los años*
+
+Se puede notar en el gráfico de abajo que, independientemente de la pandemia, hay una tendencia a la baja de los crimenes en la ciudad de Nueva York a lo largo de los años.
+```{r}
+arrests %>% group_by(anio) %>% summarise(Cantidad=n()) %>% ggplot() +
+  geom_line(aes(x=anio, y=Cantidad), color = "#004173", size=1, alpha=0.9) + labs(x = "Año", y= "Cantidad por año") + theme_minimal()
+```
+
+*Cantidad de crimenes por rango de edad a lo largo de los años*
+
+Con respecto al rango de edad, se ve que el rango de 25-44 es el más predominante en cuanto a delitos, seguido de cerca por el de 18-24 y, en los últimos años, por el de 45-64. Se nota, siguiendo al gráfico anterior, una tendencia a la baja en casi todos los rangos.
+```{r}
+
+arrests %>% group_by(anio, Age) %>% filter(Age != "Unknown") %>% summarise(Cantidad=(n())) %>% ggplot() +
+  geom_line(aes(x=anio, y=Cantidad, group = Age, color = Age), size=1, alpha=0.9)+ labs(x = "Año") + theme_minimal()
+
+
+```
+
+
+
+# Conclusiones
+
+El análisis MCA se usa generalmente para analizar un conjunto de datos, sus individuos/registros, variables y categorías. En el caso de nuestro trabajo, fue utilizado para poder analizar mediante algunas variables categóricas los distintos arrestos que fueron realizados en New York City por distintos individuos con sus respectivas características. 
+
+El objetivo es identificar las asociaciones entre las categorías de las variables. En general, dos categorías están próximas entre sí si a menudo se toman juntas, es decir, conforman un grupo de personas con perfil similar. Para el trabajo realizado no interesa tanto los individuos como tal si no las población en conjunto; poder analizar los distintos grupos etarios, las razas, el sexo, entre otras, y si relación con la cantidad o el tipo de delito que cometen.
+
+
+*¿Qué grupo etario y cuales características raciales son más propensas a ser arrestados?*
+
+Para responder esta primera pregunta, se utilizarán las conclusiones obtenidas del análisis MCA realizado en el punto anterior. En este caso, se puede afirmar que el grupo etario con su respectiva raza más propenso a ser arrestado son hombres, de tez negra, con un rango de edad entre los 25 y 44 años.
+
+Esta información es útil para poder identificar un determinado grupo de personas entre toda una población entera de individuos, y realizar un análisis que sirva para tomar distintas acciones hacia ese grupo en específico, teniendo en cuenta nuestro objetivo general de reducir el delito. 
+
+Por un lado, podemos distinguir que el rango etario identificado (25-44) pertenece a aquellas personas que ya salen de sus estudios (sea universitarios o posgrados) y empiezan a buscar un trabajo firme que logre mantenerlas. Teniendo en cuenta esto, podría ser una medida útil la de empezar a generar nuevos puestos de trabajo para personas de esas edades. Esto generaría que ellos no solo tengan un espacio de contención o un grupo de trabajo confiable, sino también un ingreso mensual que les permita tener motivación y responsabilidad hacia un objetivo en común. 
+
+También es relevante mencionar el hecho de que es necesario capacitar en empresas o en instituciones gubernamentales sobre los distintos códigos de conducta y responsabilidades. Donde hayan personas de este rango etario es importante explicar sobre las consecuencias que trae que la persona sea arrestada, para así generar conciencia e intentar disminuir los delitos que puedan llegar a suceder. 
+
+Por otro lado, podemos determinar en este grupo la característica de que su sexo es el masculino. Para ello, se podría empezar a pensar medidas que refieran a las cárceles masculinas. Sabiendo que los más arrestados son hombres, podría intentarse precauciones por el lado de intereses que tengan en común ellos. Por ejemplo, existe un caso en Argentina de una fundación llamada “Espartanos” que vio esta tendencia en hombres siendo arrestados y que vuelven a reincidir en la cárcel una vez que salen, y creó un programa para llevar el deporte rugby a las cárceles. La idea es, a través del rugby, inspirar valores tales como el compañerismo, el trabajo en equipo, la constancia, la amistad y la importancia de la salud física para los presos. Gracias a esta iniciativa creada en 2009, hoy en día se puede decir que se bajó el porcentaje de reincidencia en la cárcel, es decir, bajo la cantidad de hombres que son liberados pero vuelven a cometer un delito y por lo tanto vuelven a la cárcel. Sin el programa de Espartanos el porcentaje de reincidencia era de un 65%, pero con el programa de rugby se pudo bajar hasta un 5%. https://www.fundacionespartanos.org/
+
+Entonces, es importante poder captar estos patrones o grupos de personas, para poder aplicar las iniciativas que correspondan y pensar ideas correctas para el caso.
+
+
+*¿Qué barrio es el más peligroso respecto a la cantidad de arrestos?*
+
+El barrio más peligroso es Manhattan, contando con 0,09 arrestos por habitante. Con esta información podría intentar reducir la cantidad de arrestos con más presencia policial en el barrio de Manhattan, lo que tendría un impacto positivo que evite la realización de ciertos crímenes que terminen en arrestos. 
+
+En general, Brooklyn y Manhattan son los barrios más peligrosos, versus Staten Island que tiene el menor porcentaje de delitos. Es crucial hacer un análisis como el anterior para poder identificar estas tendencias, y poder tomar la decisión de redistribuir las patrullas de policías acorde a la cantidad de delitos que se encuentran en cada zona. No es prudente tener la misma presencia policial en Manhattan que en Staten Island, por ejemplo.
+
+
+*¿Cuál es el motivo por el cual se realizan la mayor cantidad de arrestos?*
+
+El motivo por el cual se realizan la mayor cantidad de arrestos es por delitos menores. Esta información se podría utilizar para disminuir la cantidad de arrestos mediante la aplicación de políticas públicas que informen y concienticen a la población respecto a la importancia de no cometer delitos de ningún tipo. A su vez, mediante consecuencias legales frente a estos arrestos se puede persuadir la realización de los mismos, entendiendo que tienen consecuencias. 
+
+
+*¿Qué época del año es en la que se registran más arrestos? ¿Y cómo cambia esta respuesta dependiendo del barrio?*
+
+La época en la que más se registran arrestos, en general, es en el primer trimestre de cada año, especialmente en los meses de enero y marzo. Es decir, en los meses de invierno es donde se registran más arrestos, si se toma en conjunto a todos los datos de la ciudad. 
+
+Además, se suele repetir la tendencia de que a medida que avanza el año, los arrestos en promedio van disminuyendo (hay algunos años donde se encuentran algunos picos en los meses de verano). 
+
+Si se divide a los arrestos por barrios, se puede notar que los barrios de Bronx, Brooklyn, Manhattan y Queens siguen el comportamiento mencionado anteriormente, es decir, registran números más altos de arrestos en el primer trimestre de cada año, especialmente en los meses de enero y marzo, y donde hay algunos años donde los picos se alcanzan en meses de verano (agosto) o primavera (mayo). 
+Para el barrio de Staten Island, se puede notar cierto cambio, donde los picos de arrestos se alcanzan mayoritariamente en mayo, seguidos de los meses de marzo y octubre. La novedad que presenta este barrio es que los arrestos no están concentrados en una sola época del año (como sí lo hacen todos los demás), sino que se distribuyen de manera más equitativa entre las distintas épocas.
+
+En los barrios de Bronx, Brooklyn, Manhattan y Queens también se mantiene el comportamiento que afirmaba que en promedio, a medida que transcurre el año, disminuyen los arrestos. En cambio, para el barrio de Staten Island se puede decir que en promedio se registran más arrestos en el segundo trimestre del año, seguidos del primero, tercero y cuarto, respectivamente.

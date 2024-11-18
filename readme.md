@@ -1,0 +1,1 @@
+Asegurense antes de correr de tener descargada el arrests.csv: https://drive.google.com/drive/folders/10pLrTDJNa9zM3rLGjQ69MPzspsfoHNBj?usp=drive_link
