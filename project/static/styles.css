@@ -1,0 +1,98 @@
+/* General */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #F5F5DC; /* Color de fondo pastel */
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+}
+
+/* Encabezado */
+h1 {
+    font-size: 2.5rem;
+    color: #4a90e2; /* Azul pastel */
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+/* Formulario */
+form {
+    background-color: #B6A28E; /* Fondo blanco */
+    padding: 20px;
+    border-radius: 10px; /* Bordes redondeados */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Sombra suave */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px; /* Espacio entre los elementos */
+}
+
+/* Etiqueta */
+label {
+    font-size: 1.2rem;
+    color: #555; /* Gris oscuro */
+}
+
+/* Campo de entrada */
+input[type="date"] {
+    font-size: 1rem;
+    padding: 10px;
+    border: 1px solid #ddd; /* Borde gris claro */
+    border-radius: 5px;
+    background-color: #f9f9f9; /* Fondo claro */
+    transition: all 0.3s;
+}
+
+input[type="date"]:focus {
+    border-color: #4a90e2; /* Azul pastel */
+    outline: none;
+    box-shadow: 0 0 5px rgba(74, 144, 226, 0.5); /* Brillo azul al hacer foco */
+}
+
+/* Botón */
+button {
+    font-size: 1rem;
+    padding: 10px 20px;
+    color: #fff; /* Texto blanco */
+    background-color: #4a90e2; /* Azul pastel */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #357ABD; /* Azul pastel más oscuro */
+}
+
+/* Resultados */
+#results {
+    margin-top: 20px;
+    font-size: 1.2rem;
+    color: #4a4a4a; /* Gris oscuro */
+    text-align: center;
+}
+
+#results h2 {
+    color: #4a90e2; /* Azul pastel */
+    font-size: 1.5rem;
+}
+
+/* Responsivo */
+@media (max-width: 600px) {
+    form {
+        width: 90%;
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+
+    label, button, input[type="date"] {
+        font-size: 1rem;
+    }
+}
