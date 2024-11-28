@@ -2,11 +2,12 @@ from flask import Flask, request, render_template, jsonify
 import pickle
 import pandas as pd
 from datetime import datetime, timedelta
+import os  # Importar os para manejar las variables de entorno
 
 # Crear la aplicación Flask
 app = Flask(__name__)
 
-# Cargar el modelo ARIMA guardado
+# Cargar el modelo Prophet guardado
 with open('modelo_prophet_semanal.pkl', 'rb') as model_file:
     model = pickle.load(model_file)
 
@@ -42,4 +43,6 @@ def predict():
 
 # Ejecutar la aplicación Flask
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Usar el puerto dinámico asignado por Render
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)
